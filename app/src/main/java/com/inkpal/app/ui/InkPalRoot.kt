@@ -1,0 +1,167 @@
+package com.inkpal.app.ui
+
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.inkpal.app.InkPalApp
+import com.inkpal.app.ui.details.BookDetailsScreen
+import com.inkpal.app.ui.history.HistoryScreen
+import com.inkpal.app.ui.library.LibraryScreen
+import com.inkpal.app.ui.settings.SettingsScreen
+import com.inkpal.app.ui.theme.Ink
+import com.inkpal.app.ui.theme.InkText
+
+enum class Tab { LIBRARY, HISTORY, SETTINGS }
+
+/** App shell: three tabs, plus the book details page on top when a book is opened. */
+@Composable
+fun InkPalRoot(app: InkPalApp) {
+    val data by app.store.data.collectAsStateWithLifecycle()
+    val scan by app.scanner.state.collectAsStateWithLifecycle()
+    var tab by rememberSaveable { mutableStateOf(Tab.LIBRARY) }
+    var openBookId by rememberSaveable { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+
+    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) app.scanner.addFolder(uri)
+    }
+    val addFolder = { pickFolder.launch(null) }
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Ink.colors.paper)
+            .systemBarsPadding(),
+    ) {
+        val book = openBookId?.let { id -> data.books.firstOrNull { it.id == id } }
+        if (book != null) {
+            BackHandler { openBookId = null }
+            BookDetailsScreen(
+                book = book,
+                data = data,
+                onBack = { openBookId = null },
+                onOpen = {
+                    // The reader and player arrive in the next milestones.
+                    val what = if (book.format.isAudio) "Audiobook player" else "Reader"
+                    Toast.makeText(context, "$what is coming in the next build", Toast.LENGTH_SHORT).show()
+                },
+                onToggleFinished = {
+                    if (book.status == com.inkpal.app.data.BookStatus.FINISHED) app.store.markNotFinished(book.id)
+                    else app.store.markFinished(book.id)
+                },
+                onReset = { app.store.resetProgress(book.id) },
+                onRemove = {
+                    openBookId = null
+                    app.store.removeBook(book.id)
+                },
+            )
+        } else {
+            if (tab != Tab.LIBRARY) BackHandler { tab = Tab.LIBRARY }
+            Column(Modifier.fillMaxSize()) {
+                Box(Modifier.weight(1f)) {
+                    when (tab) {
+                        Tab.LIBRARY -> LibraryScreen(
+                            data = data,
+                            scan = scan,
+                            onOpen = { openBookId = it.id },
+                            onAddFolder = addFolder,
+                            onRescan = app.scanner::scan,
+                        )
+                        Tab.HISTORY -> HistoryScreen(data = data, onOpen = { openBookId = it })
+                        Tab.SETTINGS -> SettingsScreen(
+                            data = data,
+                            scan = scan,
+                            store = app.store,
+                            onAddFolder = addFolder,
+                            onRemoveFolder = app.scanner::removeFolder,
+                            onRescan = app.scanner::scan,
+                        )
+                    }
+                }
+                BottomBar(tab) { tab = it }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BottomBar(tab: Tab, onSelect: (Tab) -> Unit) {
+    val c = Ink.colors
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(64.dp)
+            .background(c.paper)
+            .drawBehind { drawLine(c.rule, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) },
+    ) {
+        BarItem("Library", InkIcons.Library, InkIcons.LibraryBold, tab == Tab.LIBRARY) { onSelect(Tab.LIBRARY) }
+        BarItem("History", InkIcons.History, InkIcons.HistoryBold, tab == Tab.HISTORY) { onSelect(Tab.HISTORY) }
+        BarItem("Settings", InkIcons.Settings, InkIcons.SettingsBold, tab == Tab.SETTINGS) { onSelect(Tab.SETTINGS) }
+    }
+}
+
+@Composable
+private fun androidx.compose.foundation.layout.RowScope.BarItem(
+    label: String,
+    icon: ImageVector,
+    activeIcon: ImageVector,
+    active: Boolean,
+    onClick: () -> Unit,
+) {
+    val c = Ink.colors
+    Column(
+        Modifier
+            .weight(1f)
+            .fillMaxHeight()
+            .semantics { selected = active }
+            .clickable(role = Role.Tab, onClick = onClick)
+            .drawBehind {
+                if (active) {
+                    val inset = size.width * 0.3f
+                    drawLine(c.ink, Offset(inset, 1.dp.toPx()), Offset(size.width - inset, 1.dp.toPx()), 2.dp.toPx())
+                }
+            },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
+    ) {
+        Icon(if (active) activeIcon else icon, null, Modifier.size(22.dp), tint = if (active) c.ink else c.muted)
+        Text(
+            label,
+            style = InkText.small.copy(fontSize = 11.sp, fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium),
+            color = if (active) c.ink else c.muted,
+        )
+    }
+}

@@ -1,0 +1,15 @@
+.gradle/
+.kotlin/
+build/
+app/build/
+local.properties
+.idea/
+*.iml
+.DS_Store
+captures/
+
+# Release signing: never commit these. Losing them means you can never ship
+# an update to the installed app, so back them up privately.
+*.jks
+*.keystore
+keystore.properties
