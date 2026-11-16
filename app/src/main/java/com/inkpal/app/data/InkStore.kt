@@ -108,9 +108,39 @@ class InkStore(private val context: Context, private val scope: CoroutineScope) 
 
     fun restoreHidden() = update { it.copy(hidden = emptyList()) }
 
+    /** Called when a book is opened in the reader or player. "Read again" starts a finished book over. */
+    fun markOpened(id: String, restart: Boolean = false) = updateBook(id) {
+        val now = System.currentTimeMillis()
+        val base = if (restart) it.copy(progress = 0f, position = "", positionLabel = "", finishedAt = 0) else it
+        base.copy(
+            status = if (base.status == BookStatus.FINISHED && !restart) BookStatus.FINISHED else BookStatus.READING,
+            startedAt = if (base.startedAt == 0L || restart) now else base.startedAt,
+            lastOpenedAt = now,
+        )
+    }
+
+    fun savePosition(id: String, progress: Float, position: String, label: String) = updateBook(id) {
+        it.copy(progress = progress, position = position, positionLabel = label, lastOpenedAt = System.currentTimeMillis())
+    }
+
+    /**
+     * Logs a reading/listening stretch. One that starts within two minutes of the previous
+     * session for the same book is merged into it, so a quick app switch doesn't split it.
+     */
+    fun addSession(session: ReadingSession) = update { d ->
+        val last = d.sessions.lastOrNull()
+        if (last != null && last.bookId == session.bookId && session.startedAt - last.endedAt in 0..MERGE_GAP_MS) {
+            val merged = last.copy(endedAt = session.endedAt, toProgress = session.toProgress, toLabel = session.toLabel)
+            d.copy(sessions = d.sessions.dropLast(1) + merged)
+        } else {
+            d.copy(sessions = d.sessions + session)
+        }
+    }
+
     fun updateSettings(change: (AppSettings) -> AppSettings) = update { it.copy(settings = change(it.settings)) }
 
     companion object {
         private const val TAG = "InkStore"
+        private const val MERGE_GAP_MS = 2 * 60_000L
     }
 }

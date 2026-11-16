@@ -44,6 +44,17 @@ val PaperColors = InkColors(
     onInk = Color(0xFFFFFFFF),
 )
 
+/** True black for the reader: lit pixels only where there is text (saves power on OLED). */
+val NightColors = InkColors(
+    paper = Color(0xFF000000),
+    ink = Color(0xFFE6E6E6),
+    muted = Color(0xFFA6A6A6),
+    faint = Color(0xFF8C8C8C),
+    rule = Color(0xFF3A3A3A),
+    hairline = Color(0xFF262626),
+    onInk = Color(0xFF000000),
+)
+
 val LocalInkColors = staticCompositionLocalOf { PaperColors }
 
 object Ink {

@@ -75,6 +75,7 @@ fun LibraryScreen(
     data: LibraryData,
     scan: ScanState,
     onOpen: (Book) -> Unit,
+    onRead: (Book) -> Unit,
     onAddFolder: () -> Unit,
     onRescan: () -> Unit,
 ) {
@@ -135,7 +136,7 @@ fun LibraryScreen(
             ) {
                 if (!searching && (continueText != null || continueAudio != null)) {
                     item(span = { GridItemSpan(maxLineSpan) }, key = "continue") {
-                        ContinueSection(continueText, continueAudio, onOpen)
+                        ContinueSection(continueText, continueAudio, onRead)
                     }
                 }
                 item(span = { GridItemSpan(maxLineSpan) }, key = "tabs") {

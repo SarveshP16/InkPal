@@ -102,6 +102,9 @@ data class ReadingSession(
 enum class ReaderTheme { WHITE, TRUE_BLACK }
 
 @Serializable
+enum class ReaderFont(val label: String) { SERIF("Serif"), SANS("Sans"), PUBLISHER("Book's own") }
+
+@Serializable
 data class AppSettings(
     val volumeKeysTurnPages: Boolean = true,
     val keepScreenOn: Boolean = true,
@@ -109,6 +112,15 @@ data class AppSettings(
     val idleTimeoutMin: Int = 5,
     val audioSpeed: Float = 1.0f,
     val readerTheme: ReaderTheme = ReaderTheme.WHITE,
+    /** Index into the reader's size steps. */
+    val textSize: Int = 3,
+    val readerFont: ReaderFont = ReaderFont.SERIF,
+    /** 0 tight, 1 normal, 2 loose. */
+    val lineSpacing: Int = 1,
+    /** 0 narrow, 1 normal, 2 wide. */
+    val margins: Int = 1,
+    /** Reader-only screen brightness 0..1, or -1 to follow the system. */
+    val brightness: Float = -1f,
 )
 
 @Serializable

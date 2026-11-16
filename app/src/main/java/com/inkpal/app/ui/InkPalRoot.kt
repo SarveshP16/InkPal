@@ -37,6 +37,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.inkpal.app.InkPalApp
+import com.inkpal.app.data.Book
+import com.inkpal.app.data.BookStatus
+import com.inkpal.app.ui.reader.ReaderScreen
 import com.inkpal.app.ui.details.BookDetailsScreen
 import com.inkpal.app.ui.history.HistoryScreen
 import com.inkpal.app.ui.library.LibraryScreen
@@ -53,12 +56,28 @@ fun InkPalRoot(app: InkPalApp) {
     val scan by app.scanner.state.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableStateOf(Tab.LIBRARY) }
     var openBookId by rememberSaveable { mutableStateOf<String?>(null) }
+    var readerBookId by rememberSaveable { mutableStateOf<String?>(null) }
     val context = LocalContext.current
 
     val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) app.scanner.addFolder(uri)
     }
     val addFolder = { pickFolder.launch(null) }
+
+    /** Opens a book to read; a finished book starts over ("Read again"). */
+    val read: (Book) -> Unit = { b ->
+        if (b.format.isAudio) {
+            Toast.makeText(context, "The audiobook player is coming in the next build", Toast.LENGTH_SHORT).show()
+        } else {
+            app.store.markOpened(b.id, restart = b.status == BookStatus.FINISHED)
+            readerBookId = b.id
+        }
+    }
+
+    readerBookId?.let { id ->
+        ReaderScreen(app, id, onClose = { readerBookId = null })
+        return
+    }
 
     Box(
         Modifier
@@ -73,13 +92,9 @@ fun InkPalRoot(app: InkPalApp) {
                 book = book,
                 data = data,
                 onBack = { openBookId = null },
-                onOpen = {
-                    // The reader and player arrive in the next milestones.
-                    val what = if (book.format.isAudio) "Audiobook player" else "Reader"
-                    Toast.makeText(context, "$what is coming in the next build", Toast.LENGTH_SHORT).show()
-                },
+                onOpen = { read(book) },
                 onToggleFinished = {
-                    if (book.status == com.inkpal.app.data.BookStatus.FINISHED) app.store.markNotFinished(book.id)
+                    if (book.status == BookStatus.FINISHED) app.store.markNotFinished(book.id)
                     else app.store.markFinished(book.id)
                 },
                 onReset = { app.store.resetProgress(book.id) },
@@ -97,6 +112,7 @@ fun InkPalRoot(app: InkPalApp) {
                             data = data,
                             scan = scan,
                             onOpen = { openBookId = it.id },
+                            onRead = read,
                             onAddFolder = addFolder,
                             onRescan = app.scanner::scan,
                         )

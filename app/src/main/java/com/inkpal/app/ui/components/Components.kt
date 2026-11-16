@@ -277,6 +277,52 @@ fun ValueRow(title: String, value: String, onClick: () -> Unit, subtitle: String
     }
 }
 
+/** A thin black-and-white slider: 3dp track, round thumb. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+fun InkSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    onValueChangeFinished: (() -> Unit)? = null,
+    valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
+) {
+    val c = Ink.colors
+    androidx.compose.material3.Slider(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier,
+        onValueChangeFinished = onValueChangeFinished,
+        valueRange = valueRange,
+        thumb = {
+            Box(
+                Modifier
+                    .size(20.dp)
+                    .clip(CircleShape)
+                    .background(c.ink),
+            )
+        },
+        track = { state ->
+            val span = (state.valueRange.endInclusive - state.valueRange.start).takeIf { it > 0f } ?: 1f
+            val fraction = ((state.value - state.valueRange.start) / span).coerceIn(0f, 1f)
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(c.rule),
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(fraction)
+                        .background(c.ink),
+                )
+            }
+        },
+    )
+}
+
 /** Small label chip; filled for status, outlined for format. */
 @Composable
 fun Chip(text: String, filled: Boolean = false) {
