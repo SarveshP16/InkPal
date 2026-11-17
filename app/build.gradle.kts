@@ -1,8 +1,18 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
+}
+
+// Release signing key, kept out of git (keystore.properties + inkpal-release.jks at the
+// project root). Every update must be signed with this same key or it won't install over
+// the app, so keep a private backup of both files.
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
 }
 
 android {
@@ -17,13 +27,23 @@ android {
         versionName = "0.1"
     }
 
+    signingConfigs {
+        create("release") {
+            if (keystoreProperties.isNotEmpty()) {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // No release key yet: sign with the debug key so the APK installs.
-            signingConfig = signingConfigs.getByName("debug")
+            if (keystoreProperties.isNotEmpty()) signingConfig = signingConfigs.getByName("release")
         }
     }
 
