@@ -101,7 +101,7 @@ class EpubBook private constructor(
             body.traverse { node, _ ->
                 if (node is org.jsoup.nodes.TextNode && hits.size < limit) {
                     val parent = (node.parentNode() as? Element)?.normalName()
-                    if (parent != "script" && parent != "style") {
+                    if (parent != "script" && parent != "style" && !inHiddenNote(node)) {
                         val text = node.wholeText
                         val lower = text.lowercase()
                         var from = 0
@@ -117,6 +117,16 @@ class EpubBook private constructor(
             }
         }
         return hits
+    }
+
+    /** Footnote blocks are hidden in the reader, so their text is left out of search too. */
+    private fun inHiddenNote(node: org.jsoup.nodes.Node): Boolean {
+        var p = node.parentNode()
+        while (p is Element) {
+            if (p.normalName() == "aside" && "note" in (p.attr("epub:type") + " " + p.attr("role"))) return true
+            p = p.parentNode()
+        }
+        return false
     }
 
     private fun snippet(text: String, at: Int, length: Int): String {

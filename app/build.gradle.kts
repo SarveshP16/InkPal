@@ -23,8 +23,8 @@ android {
         applicationId = "com.inkpal.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
     }
 
     signingConfigs {
@@ -39,11 +39,24 @@ android {
     }
 
     buildTypes {
+        // Debug installs next to the real app (own package and data), for testing and screenshots.
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             if (keystoreProperties.isNotEmpty()) signingConfig = signingConfigs.getByName("release")
+        }
+        // Release code (minified) as a separate app, to test R8 output without touching the real one.
+        create("staging") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".staging"
+            versionNameSuffix = "-staging"
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
         }
     }
 

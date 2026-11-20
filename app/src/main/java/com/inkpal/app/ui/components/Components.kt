@@ -390,7 +390,17 @@ fun BookCover(book: Book, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(2.dp)
     val c = Ink.colors
     val img = image
-    if (img != null) {
+    if (img != null && book.format.isAudio) {
+        // Audiobook art is square: show all of it, centred on ink, rather than cropping.
+        Box(
+            modifier
+                .clip(shape)
+                .background(c.ink),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(img, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+        }
+    } else if (img != null) {
         Image(
             img,
             contentDescription = null,

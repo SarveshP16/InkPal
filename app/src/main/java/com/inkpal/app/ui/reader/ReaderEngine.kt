@@ -51,8 +51,12 @@ object ReaderStyle {
         // The page is the html element laid out in columns one screen wide; the gap equals
         // both margins, so page N starts exactly at N * screen width.
         return """
+            @namespace epub "http://www.idpf.org/2007/ops";
             @font-face { font-family: 'InkLiterata'; font-style: normal; font-weight: 200 900; src: url('$BASE$FONT_DIR/literata.ttf'); }
             @font-face { font-family: 'InkLiterata'; font-style: italic; font-weight: 200 900; src: url('$BASE$FONT_DIR/literata_italic.ttf'); }
+            aside[epub|type~="footnote"], aside[epub|type~="endnote"], aside[epub|type~="rearnote"],
+            aside[epub\:type~="footnote"], aside[epub\:type~="endnote"], aside[epub\:type~="rearnote"],
+            aside[role~="doc-footnote"], aside[role~="doc-endnote"] { display: none !important; }
             mark.inkpal-hit { background: $fg !important; color: $bg !important; border-radius: 2px; }
             :root { margin: 0 !important; padding: ${topPx}px ${m}px ${bottomPx}px ${m}px !important;
               width: 100vw !important; height: 100vh !important; box-sizing: border-box !important;
@@ -80,7 +84,10 @@ var W=function(){return window.innerWidth;};
 var se=function(){return document.scrollingElement||document.documentElement;};
 var pageOf=function(el){return Math.max(0,Math.floor((el.getBoundingClientRect().left+se().scrollLeft)/W()));};
 var texts=function(){return document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,null);};
-var skip=function(node){var p=node.parentNode?node.parentNode.nodeName.toLowerCase():'';return p==='script'||p==='style';};
+var inNote=function(node){var e=node.parentElement;var a=e&&e.closest?e.closest('aside'):null;if(!a){return false;}
+  var t=(a.getAttributeNS('http://www.idpf.org/2007/ops','type')||a.getAttribute('epub:type')||'')+' '+(a.getAttribute('role')||'');
+  return /note/.test(t);};
+var skip=function(node){var p=node.parentNode?node.parentNode.nodeName.toLowerCase():'';return p==='script'||p==='style'||inNote(node);};
 window.InkPal={
  count:function(){return Math.max(1,Math.round(se().scrollWidth/W()));},
  go:function(p){se().scrollLeft=p*W();},
@@ -105,7 +112,9 @@ window.InkPal={
      r.selectNodeContents(node);var b=r.getBoundingClientRect();if(b.right<=0){continue;}if(b.left>=W()){break;}
      var lo=0,hi=v.length-1;
      while(lo<hi){var mid=(lo+hi)>>1;r.setStart(node,mid);r.setEnd(node,mid+1);if(r.getBoundingClientRect().left>=-1){hi=mid;}else{lo=mid+1;}}
-     return v.substring(lo).replace(/\s+/g,' ').trim().substring(0,160);}
+     var out=v.substring(lo);var more;
+     while(out.length<200&&(more=w.nextNode())){if(!skip(more)){out+=' '+more.nodeValue;}}
+     return out.replace(/\s+/g,' ').trim().substring(0,200);}
    return '';},
  linkAt:function(x,y){var el=document.elementFromPoint(x,y);if(!el||!el.closest){return null;}
    var a=el.closest('a[href]');if(!a){return null;}

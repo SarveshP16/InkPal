@@ -253,7 +253,9 @@ private fun ReaderContent(
             val position = engine.position
             val progress = engine.progress
             val label = epub.chapterTitle(engine.index)
-            engine.snippet { text ->
+            engine.snippet { raw ->
+                // Drop the chapter heading when the page starts with it.
+                val text = (if (raw.startsWith(label, ignoreCase = true)) raw.substring(label.length) else raw).trim().take(160)
                 store.addBookmark(
                     Bookmark(
                         id = UUID.randomUUID().toString(),

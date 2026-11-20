@@ -356,7 +356,7 @@ private fun PdfContent(
                 Text("${(progressOf(page) * 100).toInt()}%", style = InkText.small, color = c.faint)
             }
         }
-        if (bookmarked) BookmarkRibbon(cutoutTop, Modifier.align(Alignment.TopEnd))
+        if (bookmarked && scale <= 1.01f) BookmarkRibbon(cutoutTop, Modifier.align(Alignment.TopEnd))
 
         if (menuOpen && panel == PdfPanel.NONE && !showEnd) {
             PdfMenu(

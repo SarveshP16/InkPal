@@ -52,6 +52,7 @@ object Format {
         return when {
             h > 0 -> "${h}h ${m}m"
             totalMin > 0 -> "$totalMin min"
+            ms >= 1_000 -> "${ms / 1_000} sec"
             else -> "<1 min"
         }
     }

@@ -585,7 +585,7 @@ internal fun EndOfBook(
                 .padding(vertical = 14.dp),
         ) {
             Stat("Started", if (book.startedAt > 0) Format.shortDate(book.startedAt) else "—", Modifier.weight(1f))
-            Stat("Reading time", Format.duration(readingMs), Modifier.weight(1f))
+            Stat(if (book.format.isAudio) "Listening time" else "Reading time", Format.duration(readingMs), Modifier.weight(1f))
             Stat("Sessions", (sessions.size + if (currentSessionMs > 0) 1 else 0).toString(), Modifier.weight(1f))
         }
         Spacer(Modifier.weight(1f))
@@ -614,7 +614,7 @@ internal fun EndOfBook(
         } else {
             PrimaryButton("Mark as finished", onMarkFinished, Modifier.fillMaxWidth(), icon = InkIcons.Check)
             Spacer(Modifier.height(10.dp))
-            OutlineButton("Not yet, keep reading", onKeepReading, Modifier.fillMaxWidth())
+            OutlineButton(if (book.format.isAudio) "Not yet, keep listening" else "Not yet, keep reading", onKeepReading, Modifier.fillMaxWidth())
         }
     }
 }

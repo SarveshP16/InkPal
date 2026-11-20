@@ -48,6 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -156,6 +157,11 @@ internal fun SearchPanel(
 ) {
     val c = Ink.colors
     val focus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val submit = {
+        state.submitted = state.query.trim()
+        keyboard?.hide()
+    }
     LaunchedEffect(Unit) { if (state.submitted.isEmpty()) focus.requestFocus() }
     LaunchedEffect(state.submitted) {
         val q = state.submitted
@@ -196,13 +202,13 @@ internal fun SearchPanel(
                     textStyle = InkText.body.copy(fontSize = 16.sp, color = c.ink),
                     cursorBrush = SolidColor(c.ink),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { state.submitted = state.query.trim() }),
+                    keyboardActions = KeyboardActions(onSearch = { submit() }),
                     modifier = Modifier
                         .fillMaxWidth()
                         .focusRequester(focus),
                 )
             }
-            IconBtn(InkIcons.Search, "Search", { state.submitted = state.query.trim() })
+            IconBtn(InkIcons.Search, "Search", { submit() })
         }
         val status = when {
             state.running -> "Searching…"
