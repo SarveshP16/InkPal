@@ -92,6 +92,7 @@ fun SettingsScreen(
             data.folders.forEach { folder ->
                 val inFolder = data.books.filter { it.folderUri == folder.uri }
                 val epubs = inFolder.count { it.format == BookFormat.EPUB }
+                val pdfs = inFolder.count { it.format == BookFormat.PDF }
                 val m4bs = inFolder.count { it.format == BookFormat.M4B }
                 Row(
                     Modifier
@@ -107,6 +108,7 @@ fun SettingsScreen(
                         Text(
                             listOfNotNull(
                                 "$epubs EPUB".takeIf { epubs > 0 },
+                                "$pdfs PDF".takeIf { pdfs > 0 },
                                 "$m4bs M4B".takeIf { m4bs > 0 },
                             ).joinToString(" · ").ifEmpty { "No books" },
                             style = InkText.small,

@@ -184,6 +184,7 @@ class LibraryScanner(
         val info = try {
             when (item.format) {
                 BookFormat.EPUB -> EpubMeta.read(context, uri)
+                BookFormat.PDF -> PdfMeta.read(context, uri)
                 BookFormat.M4B -> AudioMeta.read(context, uri)
             }
         } catch (e: Exception) {
@@ -204,6 +205,7 @@ class LibraryScanner(
             addedAt = System.currentTimeMillis(),
             hasCover = hasCover,
             durationMs = info?.durationMs ?: 0,
+            pageCount = info?.pages ?: 0,
         )
     }
 

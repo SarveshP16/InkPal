@@ -105,7 +105,7 @@ fun LibraryScreen(
             }
     }
     val reading = data.books.filter { it.status == BookStatus.READING }
-    val continueText = reading.filter { it.format == BookFormat.EPUB }.maxByOrNull { it.lastOpenedAt }
+    val continueText = reading.filter { !it.format.isAudio }.maxByOrNull { it.lastOpenedAt }
     val continueAudio = reading.filter { it.format.isAudio }.maxByOrNull { it.lastOpenedAt }
 
     Column(Modifier.fillMaxSize()) {
@@ -376,7 +376,7 @@ private fun EmptyLibrary(onAddFolder: () -> Unit) {
         Text("Your library is empty", style = InkText.bookTitleLarge, textAlign = TextAlign.Center)
         Spacer(Modifier.height(10.dp))
         Text(
-            "Choose the folders on your phone that hold your .epub books and .m4b audiobooks. InkPal only reads the folders you pick.",
+            "Choose the folders on your phone that hold your .epub and .pdf books and .m4b audiobooks. InkPal only reads the folders you pick.",
             style = InkText.body,
             color = c.muted,
             textAlign = TextAlign.Center,
@@ -399,7 +399,7 @@ private fun NoBooks(scanning: Boolean, onRescan: () -> Unit, onAddFolder: () -> 
         Text(if (scanning) "Looking for books…" else "No books found", style = InkText.bookTitleLarge, textAlign = TextAlign.Center)
         Spacer(Modifier.height(10.dp))
         Text(
-            if (scanning) "New books appear here as they're found." else "None of your folders contain .epub or .m4b files yet.",
+            if (scanning) "New books appear here as they're found." else "None of your folders contain .epub, .pdf or .m4b files yet.",
             style = InkText.body,
             color = c.muted,
             textAlign = TextAlign.Center,

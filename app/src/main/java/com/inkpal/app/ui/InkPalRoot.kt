@@ -39,7 +39,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.inkpal.app.InkPalApp
 import com.inkpal.app.data.Book
 import com.inkpal.app.data.BookStatus
+import com.inkpal.app.ui.reader.PdfReaderScreen
 import com.inkpal.app.ui.reader.ReaderScreen
+import com.inkpal.app.data.BookFormat
 import com.inkpal.app.ui.details.BookDetailsScreen
 import com.inkpal.app.ui.history.HistoryScreen
 import com.inkpal.app.ui.library.LibraryScreen
@@ -76,7 +78,9 @@ fun InkPalRoot(app: InkPalApp) {
     }
 
     readerBookId?.let { id ->
-        ReaderScreen(app, id, onClose = { readerBookId = null })
+        val format = data.books.firstOrNull { it.id == id }?.format
+        if (format == BookFormat.PDF) PdfReaderScreen(app, id, onClose = { readerBookId = null })
+        else ReaderScreen(app, id, onClose = { readerBookId = null })
         return
     }
 

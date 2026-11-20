@@ -92,6 +92,7 @@ fun BookDetailsScreen(
                         add(listOfNotNull(
                             Format.fileSize(book.sizeBytes).takeIf { book.sizeBytes > 0 },
                             Format.duration(book.durationMs).takeIf { book.durationMs > 0 },
+                            "${book.pageCount} pages".takeIf { book.pageCount > 1 },
                         ).joinToString(" · "))
                         if (folder.isNotEmpty()) add(folder)
                     }.filter { it.isNotEmpty() }

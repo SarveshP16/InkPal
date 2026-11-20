@@ -16,7 +16,93 @@ data class BookInfo(
     val author: String?,
     val cover: ByteArray?,
     val durationMs: Long = 0,
+    val pages: Int = 0,
 )
+
+/**
+ * Reads page count and a first-page cover from a PDF with Android's PdfRenderer, and the
+ * title/author from the document's Info dictionary when they're stored as plain text.
+ */
+object PdfMeta {
+    fun read(context: Context, uri: Uri): BookInfo? {
+        val pfd = context.contentResolver.openFileDescriptor(uri, "r") ?: return null
+        return pfd.use { fd ->
+            val (pages, cover) = android.graphics.pdf.PdfRenderer(fd).use { renderer ->
+                val count = renderer.pageCount
+                val bytes = if (count > 0) renderer.openPage(0).use { page ->
+                    val w = 480
+                    val h = (w * page.height.toFloat() / page.width.coerceAtLeast(1)).toInt().coerceIn(1, 1200)
+                    val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+                    bmp.eraseColor(android.graphics.Color.WHITE)
+                    page.render(bmp, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    val out = java.io.ByteArrayOutputStream()
+                    bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out)
+                    bmp.recycle()
+                    out.toByteArray()
+                } else null
+                count to bytes
+            }
+            val (title, author) = infoStrings(context, uri)
+            BookInfo(title = title, author = author, cover = cover, pages = pages)
+        }
+    }
+
+    /** Looks for /Title and /Author literal strings near the start and end of the file. */
+    private fun infoStrings(context: Context, uri: Uri): Pair<String?, String?> = try {
+        val chunk = 96 * 1024
+        val text = context.contentResolver.openFileDescriptor(uri, "r")?.use { fd ->
+            java.io.FileInputStream(fd.fileDescriptor).channel.use { ch ->
+                val size = ch.size()
+                fun read(at: Long, len: Int): ByteArray {
+                    val buf = java.nio.ByteBuffer.allocate(len)
+                    ch.position(at)
+                    while (buf.hasRemaining() && ch.read(buf) > 0) Unit
+                    return buf.array().copyOf(buf.position())
+                }
+                val head = read(0, minOf(chunk.toLong(), size).toInt())
+                val tail = if (size > chunk) read(size - chunk, chunk) else ByteArray(0)
+                String(head + tail, Charsets.ISO_8859_1)
+            }
+        }.orEmpty()
+        fun field(name: String): String? {
+            val m = Regex("/$name\\s*\\(((?:\\\\.|[^\\\\)])*)\\)").find(text) ?: return null
+            return decodePdfString(m.groupValues[1]).trim().takeIf { it.isNotEmpty() && it.length < 300 }
+        }
+        field("Title") to field("Author")
+    } catch (e: Exception) {
+        null to null
+    }
+
+    private fun decodePdfString(raw: String): String {
+        val sb = StringBuilder()
+        var i = 0
+        while (i < raw.length) {
+            val ch = raw[i]
+            if (ch == '\\' && i + 1 < raw.length) {
+                val n = raw[i + 1]
+                when (n) {
+                    'n' -> sb.append('\n'); 'r' -> sb.append('\r'); 't' -> sb.append('\t')
+                    '(', ')', '\\' -> sb.append(n)
+                    in '0'..'7' -> {
+                        var j = i + 1
+                        var v = 0
+                        while (j < raw.length && j < i + 4 && raw[j] in '0'..'7') { v = v * 8 + (raw[j] - '0'); j++ }
+                        sb.append(v.toChar()); i = j; continue
+                    }
+                    else -> sb.append(n)
+                }
+                i += 2
+            } else {
+                sb.append(ch); i++
+            }
+        }
+        val s = sb.toString()
+        // UTF-16BE with a byte-order mark, otherwise PDFDocEncoding (close enough to Latin-1).
+        return if (s.length >= 2 && s[0] == 'þ' && s[1] == 'ÿ') {
+            String(s.substring(2).map { it.code.toByte() }.toByteArray(), Charsets.UTF_16BE)
+        } else s
+    }
+}
 
 /** Reads title, author and cover from an EPUB (a zip with an OPF package file). */
 object EpubMeta {

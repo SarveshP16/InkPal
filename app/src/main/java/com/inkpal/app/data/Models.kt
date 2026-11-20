@@ -5,6 +5,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 enum class BookFormat(val label: String) {
     EPUB("EPUB"),
+    PDF("PDF"),
     M4B("M4B");
 
     val isAudio: Boolean get() = this == M4B
@@ -12,6 +13,7 @@ enum class BookFormat(val label: String) {
     companion object {
         fun fromFileName(name: String): BookFormat? = when (name.substringAfterLast('.', "").lowercase()) {
             "epub" -> EPUB
+            "pdf" -> PDF
             "m4b" -> M4B
             else -> null
         }
@@ -40,6 +42,8 @@ data class Book(
     val hasCover: Boolean = false,
     /** Audiobooks only. */
     val durationMs: Long = 0,
+    /** PDFs only. */
+    val pageCount: Int = 0,
     val status: BookStatus = BookStatus.NEW,
     /** 0..1 through the whole book. */
     val progress: Float = 0f,

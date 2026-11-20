@@ -158,8 +158,8 @@ fun ReaderScreen(app: InkPalApp, bookId: String, onClose: () -> Unit) {
             val result = opened
             when {
                 book == null -> LaunchedEffect(Unit) { onClose() }
-                result == null -> Message("Opening…", null, onClose)
-                result.isFailure -> Message(
+                result == null -> ReaderMessage("Opening…", null, onClose)
+                result.isFailure -> ReaderMessage(
                     "Can't open this book",
                     result.exceptionOrNull()?.message ?: "The file may have moved or be damaged.",
                     onClose,
@@ -171,7 +171,7 @@ fun ReaderScreen(app: InkPalApp, bookId: String, onClose: () -> Unit) {
 }
 
 @Composable
-private fun Message(title: String, detail: String?, onClose: () -> Unit) {
+internal fun ReaderMessage(title: String, detail: String?, onClose: () -> Unit) {
     BackHandler(onBack = onClose)
     Column(
         Modifier
@@ -216,7 +216,6 @@ private fun ReaderContent(
     var showEnd by remember { mutableStateOf(false) }
     var atEnd by remember { mutableStateOf(false) }
     var lastTouch by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    var idle by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<NoteState?>(null) }
     val search = remember(epub) { SearchState() }
     val scope = rememberCoroutineScope()
@@ -303,79 +302,17 @@ private fun ReaderContent(
         }
     }
 
-    // Reading session: from start/return to leaving the screen or the app.
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    DisposableEffect(lifecycle, tracker) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_START -> tracker.begin()
-                Lifecycle.Event.ON_STOP -> tracker.end()
-                else -> Unit
-            }
-        }
-        lifecycle.addObserver(observer)
-        onDispose {
-            lifecycle.removeObserver(observer)
-            tracker.end()
-        }
-    }
-
-    // Full screen while reading.
-    DisposableEffect(activity, dark) {
-        val window = activity?.window
-        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
-        controller?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        controller?.hide(WindowInsetsCompat.Type.systemBars())
-        controller?.isAppearanceLightStatusBars = !dark
-        controller?.isAppearanceLightNavigationBars = !dark
-        onDispose {
-            controller?.show(WindowInsetsCompat.Type.systemBars())
-            controller?.isAppearanceLightStatusBars = true
-            controller?.isAppearanceLightNavigationBars = true
-        }
-    }
-
-    // Reader-only brightness.
-    DisposableEffect(activity, settings.brightness) {
-        val window = activity?.window
-        window?.attributes = window?.attributes?.apply {
-            screenBrightness = if (settings.brightness < 0f) WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
-            else settings.brightness.coerceIn(0.01f, 1f)
-        }
-        onDispose {
-            window?.attributes = window?.attributes?.apply {
-                screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
-            }
-        }
-    }
-
-    // Keep the screen on while reading, until nothing has happened for the idle timeout.
-    LaunchedEffect(lastTouch, settings.keepScreenOn, settings.idleTimeoutMin) {
-        idle = false
-        if (settings.keepScreenOn && settings.idleTimeoutMin > 0) {
-            delay(settings.idleTimeoutMin * 60_000L)
-            idle = true
-        }
-    }
-    DisposableEffect(settings.keepScreenOn, idle) {
-        view.keepScreenOn = settings.keepScreenOn && !idle
-        onDispose { view.keepScreenOn = false }
-    }
-
-    // Volume keys turn pages when nothing is open on top of the page.
-    val latestSettings by rememberUpdatedState(settings)
-    val overlayOpen by rememberUpdatedState(menuOpen || panel != Panel.NONE || showEnd || note != null)
-    DisposableEffect(engine) {
-        ReaderKeys.active = { latestSettings.volumeKeysTurnPages && !overlayOpen }
-        ReaderKeys.turn = { forward ->
+    ReaderEffects(
+        tracker = tracker,
+        settings = settings,
+        theme = theme,
+        lastTouch = lastTouch,
+        overlayOpen = menuOpen || panel != Panel.NONE || showEnd || note != null,
+        onTurn = { forward ->
             touched()
             if (forward) engine.next() else engine.prev()
-        }
-        onDispose {
-            ReaderKeys.active = null
-            ReaderKeys.turn = null
-        }
-    }
+        },
+    )
 
     BackHandler {
         when {
