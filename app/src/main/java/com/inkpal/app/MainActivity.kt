@@ -1,5 +1,6 @@
 package com.inkpal.app
 
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.view.KeyEvent
@@ -20,6 +21,7 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
+        handleIntent(intent)
         setContent {
             InkPalTheme {
                 InkPalRoot(app)
@@ -41,9 +43,28 @@ class MainActivity : ComponentActivity() {
         return super.dispatchKeyEvent(event)
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    /** The playback notification opens the app with this extra: show the player. */
+    private fun handleIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_OPEN_PLAYER, false) == true) {
+            app.audio.openPlayerRequest.value = true
+            intent.removeExtra(EXTRA_OPEN_PLAYER)
+        }
+    }
+
     override fun onStart() {
         super.onStart()
         // Pick up books added to the folders since last time.
         app.scanner.scanIfStale()
+        // Reattach to an audiobook that kept playing while the app was away.
+        if (app.audio.servicePlayer != null) app.audio.reconnect()
+    }
+
+    companion object {
+        const val EXTRA_OPEN_PLAYER = "com.inkpal.app.OPEN_PLAYER"
     }
 }

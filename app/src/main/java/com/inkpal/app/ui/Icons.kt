@@ -66,6 +66,8 @@ object InkIcons {
     val Pause = icon("pause", "M7 5h3.5v14H7zM13.5 5H17v14h-3.5z", filled = true)
     val Back30 = icon("back-30", "M4 12a8 8 0 1 0 2.5-5.8", "M4 3v4h4")
     val Forward30 = icon("forward-30", "M20 12a8 8 0 1 1-2.5-5.8", "M20 3v4h-4")
+    val ChevronDown = icon("chevron-down", "M6 9l6 6 6-6")
+    val More = icon("more", circle(12f, 5f, 1.6f), circle(12f, 12f, 1.6f), circle(12f, 19f, 1.6f), filled = true)
     val Moon = icon("moon", "M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z")
     val Contents = icon("contents", "M9 6h11M9 12h11M9 18h11", circle(4.5f, 6f, 1f), circle(4.5f, 12f, 1f), circle(4.5f, 18f, 1f))
     val ChapterPrev = icon("chapter-prev", "M6 5v14", "M18 5L9 12l9 7z")

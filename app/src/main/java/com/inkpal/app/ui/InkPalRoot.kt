@@ -39,6 +39,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.inkpal.app.InkPalApp
 import com.inkpal.app.data.Book
 import com.inkpal.app.data.BookStatus
+import androidx.compose.runtime.LaunchedEffect
+import com.inkpal.app.ui.player.AudioPlayerScreen
+import com.inkpal.app.ui.player.MiniPlayer
 import com.inkpal.app.ui.reader.PdfReaderScreen
 import com.inkpal.app.ui.reader.ReaderScreen
 import com.inkpal.app.data.BookFormat
@@ -52,7 +55,7 @@ import com.inkpal.app.ui.theme.InkText
 
 enum class Tab { LIBRARY, HISTORY, WISHLIST, SETTINGS }
 
-/** App shell: three tabs, plus the book details page on top when a book is opened. */
+/** App shell: four tabs, the book details page, the readers and the audiobook player. */
 @Composable
 fun InkPalRoot(app: InkPalApp) {
     val data by app.store.data.collectAsStateWithLifecycle()
@@ -60,7 +63,16 @@ fun InkPalRoot(app: InkPalApp) {
     var tab by rememberSaveable { mutableStateOf(Tab.LIBRARY) }
     var openBookId by rememberSaveable { mutableStateOf<String?>(null) }
     var readerBookId by rememberSaveable { mutableStateOf<String?>(null) }
-    val context = LocalContext.current
+    var playerOpen by rememberSaveable { mutableStateOf(false) }
+    val openPlayerRequest by app.audio.openPlayerRequest.collectAsStateWithLifecycle()
+    LaunchedEffect(openPlayerRequest) {
+        if (openPlayerRequest) {
+            readerBookId = null
+            playerOpen = true
+            app.audio.reconnect()
+            app.audio.openPlayerRequest.value = false
+        }
+    }
 
     val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) app.scanner.addFolder(uri)
@@ -70,7 +82,9 @@ fun InkPalRoot(app: InkPalApp) {
     /** Opens a book to read; a finished book starts over ("Read again"). */
     val read: (Book) -> Unit = { b ->
         if (b.format.isAudio) {
-            Toast.makeText(context, "The audiobook player is coming in the next build", Toast.LENGTH_SHORT).show()
+            app.store.markOpened(b.id, restart = b.status == BookStatus.FINISHED)
+            app.store.book(b.id)?.let { app.audio.play(it) }
+            playerOpen = true
         } else {
             app.store.markOpened(b.id, restart = b.status == BookStatus.FINISHED)
             readerBookId = b.id
@@ -81,6 +95,25 @@ fun InkPalRoot(app: InkPalApp) {
         val format = data.books.firstOrNull { it.id == id }?.format
         if (format == BookFormat.PDF) PdfReaderScreen(app, id, onClose = { readerBookId = null })
         else ReaderScreen(app, id, onClose = { readerBookId = null })
+        return
+    }
+
+    if (playerOpen) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Ink.colors.paper)
+                .systemBarsPadding(),
+        ) {
+            AudioPlayerScreen(
+                app = app,
+                onClose = { playerOpen = false },
+                onDetails = {
+                    playerOpen = false
+                    openBookId = it
+                },
+            )
+        }
         return
     }
 
@@ -133,6 +166,7 @@ fun InkPalRoot(app: InkPalApp) {
                         )
                     }
                 }
+                MiniPlayer(app, onOpen = { playerOpen = true })
                 BottomBar(tab) { tab = it }
             }
         }
