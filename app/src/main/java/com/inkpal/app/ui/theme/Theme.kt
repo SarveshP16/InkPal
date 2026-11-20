@@ -10,8 +10,13 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
+import com.inkpal.app.R
 import androidx.compose.ui.unit.sp
 
 /**
@@ -55,16 +60,52 @@ val NightColors = InkColors(
     onInk = Color(0xFF000000),
 )
 
+/** Warm paper for the reader: softer than white, still high contrast (9:1). */
+val SepiaColors = InkColors(
+    paper = Color(0xFFF4ECD8),
+    ink = Color(0xFF2E2416),
+    muted = Color(0xFF5A4C3A),
+    faint = Color(0xFF6E604C),
+    rule = Color(0xFFD6C9AE),
+    hairline = Color(0xFFE6DCC4),
+    onInk = Color(0xFFF4ECD8),
+)
+
 val LocalInkColors = staticCompositionLocalOf { PaperColors }
+
+/** Paper and ink of a reader theme, for the theme pickers. */
+fun readerSwatch(theme: com.inkpal.app.data.ReaderTheme): Pair<Color, Color> = when (theme) {
+    com.inkpal.app.data.ReaderTheme.WHITE -> Color.White to Color(0xFF111111)
+    com.inkpal.app.data.ReaderTheme.SEPIA -> SepiaColors.paper to SepiaColors.ink
+    com.inkpal.app.data.ReaderTheme.TRUE_BLACK -> Color.Black to Color.White
+}
 
 object Ink {
     val colors: InkColors
         @Composable get() = LocalInkColors.current
 }
 
-/** System serif (Noto Serif) for book-ish type, system sans for the interface. */
+/** Literata (bundled, OFL) for book-ish type, system sans for the interface. */
+@OptIn(ExperimentalTextApi::class)
 object InkFonts {
-    val serif: FontFamily = FontFamily.Serif
+    private fun literata(weight: Int) = Font(
+        R.font.literata,
+        weight = FontWeight(weight),
+        variationSettings = FontVariation.Settings(FontVariation.weight(weight)),
+    )
+
+    val serif: FontFamily = FontFamily(
+        literata(400),
+        literata(500),
+        literata(600),
+        literata(700),
+        Font(
+            R.font.literata_italic,
+            weight = FontWeight.Normal,
+            style = FontStyle.Italic,
+            variationSettings = FontVariation.Settings(FontVariation.weight(400)),
+        ),
+    )
     val sans: FontFamily = FontFamily.SansSerif
 }
 

@@ -14,8 +14,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.inkpal.app.R
 import com.inkpal.app.data.AppSettings
 import com.inkpal.app.data.ReaderFont
+import com.inkpal.app.data.ReaderTheme
 import com.inkpal.app.data.epub.EpubBook
 import com.inkpal.app.data.epub.TocEntry
 import org.json.JSONObject
@@ -28,14 +30,20 @@ object ReaderStyle {
     private val spacings = listOf(1.4f, 1.6f, 1.9f)
     private val margins = listOf(16, 28, 40)
 
-    fun css(s: AppSettings, dark: Boolean, topPx: Int, bottomPx: Int): String {
+    /** Background and text colours of the page for each reader theme. */
+    fun pageColors(theme: ReaderTheme): Pair<String, String> = when (theme) {
+        ReaderTheme.WHITE -> "#FFFFFF" to "#111111"
+        ReaderTheme.SEPIA -> "#F4ECD8" to "#2E2416"
+        ReaderTheme.TRUE_BLACK -> "#000000" to "#C8C8C8"
+    }
+
+    fun css(s: AppSettings, theme: ReaderTheme, topPx: Int, bottomPx: Int): String {
         val m = margins[s.margins.coerceIn(0, margins.lastIndex)]
         val size = sizes[s.textSize.coerceIn(0, sizes.lastIndex)]
         val lh = spacings[s.lineSpacing.coerceIn(0, spacings.lastIndex)]
-        val bg = if (dark) "#000000" else "#FFFFFF"
-        val fg = if (dark) "#C8C8C8" else "#111111"
+        val (bg, fg) = pageColors(theme)
         val family = when (s.readerFont) {
-            ReaderFont.SERIF -> "serif"
+            ReaderFont.SERIF -> "'InkLiterata', serif"
             ReaderFont.SANS -> "sans-serif"
             ReaderFont.PUBLISHER -> null
         }
@@ -43,6 +51,9 @@ object ReaderStyle {
         // The page is the html element laid out in columns one screen wide; the gap equals
         // both margins, so page N starts exactly at N * screen width.
         return """
+            @font-face { font-family: 'InkLiterata'; font-style: normal; font-weight: 200 900; src: url('$BASE$FONT_DIR/literata.ttf'); }
+            @font-face { font-family: 'InkLiterata'; font-style: italic; font-weight: 200 900; src: url('$BASE$FONT_DIR/literata_italic.ttf'); }
+            mark.inkpal-hit { background: $fg !important; color: $bg !important; border-radius: 2px; }
             :root { margin: 0 !important; padding: ${topPx}px ${m}px ${bottomPx}px ${m}px !important;
               width: 100vw !important; height: 100vh !important; box-sizing: border-box !important;
               column-count: 1 !important; column-gap: ${2 * m}px !important; column-fill: auto !important;
@@ -82,6 +93,8 @@ window.addEventListener('resize',function(){setTimeout(InkPal.report,30);});
 
 private const val HOST = "book.inkpal"
 private const val BASE = "https://$HOST/"
+/** App files (the bundled reading font) are served under this path, outside any book's paths. */
+private const val FONT_DIR = "__inkpal__"
 
 /**
  * Shows an EPUB one page at a time in a WebView. Each chapter is laid out in screen-wide
@@ -267,6 +280,14 @@ class ReaderEngine(
             val url = request.url
             if (url.host != HOST) return notFound()
             val path = url.path.orEmpty().removePrefix("/")
+            if (path.startsWith("$FONT_DIR/")) {
+                val res = when (path.substringAfter('/')) {
+                    "literata.ttf" -> R.font.literata
+                    "literata_italic.ttf" -> R.font.literata_italic
+                    else -> return notFound()
+                }
+                return WebResourceResponse("font/ttf", null, view.context.resources.openRawResource(res))
+            }
             return try {
                 val stream = epub.open(path) ?: return notFound()
                 val type = epub.mediaType(path)
@@ -286,7 +307,7 @@ class ReaderEngine(
     }
 
     companion object {
-        fun backgroundFor(dark: Boolean): Int = if (dark) Color.BLACK else Color.WHITE
+        fun backgroundFor(theme: ReaderTheme): Int = Color.parseColor(ReaderStyle.pageColors(theme).first)
 
         /** Removes the book's own scripts and adds InkPal's style and page script to the head. */
         fun inject(html: String, css: String): String {

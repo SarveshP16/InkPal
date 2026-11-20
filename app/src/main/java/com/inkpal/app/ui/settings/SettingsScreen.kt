@@ -178,15 +178,14 @@ fun SettingsScreen(
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             SectionLabel("Reader theme")
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ThemeOption("White", "Default", s.readerTheme == ReaderTheme.WHITE, dark = false, Modifier.weight(1f)) {
-                    store.updateSettings { it.copy(readerTheme = ReaderTheme.WHITE) }
-                }
-                ThemeOption("True black", "Saves battery", s.readerTheme == ReaderTheme.TRUE_BLACK, dark = true, Modifier.weight(1f)) {
-                    store.updateSettings { it.copy(readerTheme = ReaderTheme.TRUE_BLACK) }
+                ReaderTheme.entries.forEach { theme ->
+                    ThemeOption(theme.label, theme.note, s.readerTheme == theme, theme, Modifier.weight(1f)) {
+                        store.updateSettings { it.copy(readerTheme = theme) }
+                    }
                 }
             }
             Text(
-                "True black uses less power on OLED screens. More themes are coming later.",
+                "Sepia is easier on the eyes at night. True black uses less power on OLED screens.",
                 style = InkText.small,
                 color = c.muted,
             )
@@ -242,11 +241,11 @@ private fun <T> OptionsMenu(
 }
 
 @Composable
-private fun ThemeOption(title: String, subtitle: String, selected: Boolean, dark: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun ThemeOption(title: String, subtitle: String, selected: Boolean, theme: ReaderTheme, modifier: Modifier, onClick: () -> Unit) {
     val c = Ink.colors
     val shape = RoundedCornerShape(6.dp)
-    val bg = if (dark) androidx.compose.ui.graphics.Color.Black else c.paper
-    val fg = if (dark) androidx.compose.ui.graphics.Color.White else c.ink
+    val (bg, fg) = com.inkpal.app.ui.theme.readerSwatch(theme)
+    val dark = theme != ReaderTheme.WHITE
     Column(
         modifier
             .heightIn(min = 60.dp)

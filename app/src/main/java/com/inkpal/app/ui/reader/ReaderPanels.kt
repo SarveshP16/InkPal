@@ -417,11 +417,11 @@ internal fun TextPanel(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SectionLabel("Theme")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ThemeChoice("White", "Default", Color.White, Color(0xFF111111), settings.readerTheme == ReaderTheme.WHITE, Modifier.weight(1f)) {
-                        onChange { it.copy(readerTheme = ReaderTheme.WHITE) }
-                    }
-                    ThemeChoice("True black", "Saves battery", Color.Black, Color.White, settings.readerTheme == ReaderTheme.TRUE_BLACK, Modifier.weight(1f)) {
-                        onChange { it.copy(readerTheme = ReaderTheme.TRUE_BLACK) }
+                    ReaderTheme.entries.forEach { theme ->
+                        val (bg, fg) = com.inkpal.app.ui.theme.readerSwatch(theme)
+                        ThemeChoice(theme.label, theme.note, bg, fg, settings.readerTheme == theme, Modifier.weight(1f)) {
+                            onChange { it.copy(readerTheme = theme) }
+                        }
                     }
                 }
             }

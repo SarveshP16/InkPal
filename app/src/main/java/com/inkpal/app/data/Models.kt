@@ -99,10 +99,15 @@ data class ReadingSession(
 }
 
 @Serializable
-enum class ReaderTheme { WHITE, TRUE_BLACK }
+enum class ReaderTheme(val label: String, val note: String) {
+    WHITE("White", "Default"),
+    SEPIA("Sepia", "Warm paper"),
+    TRUE_BLACK("True black", "Saves battery"),
+}
 
+/** SERIF is the bundled Literata (the name stays SERIF so saved settings keep working). */
 @Serializable
-enum class ReaderFont(val label: String) { SERIF("Serif"), SANS("Sans"), PUBLISHER("Book's own") }
+enum class ReaderFont(val label: String) { SERIF("Literata"), SANS("Sans"), PUBLISHER("Book's own") }
 
 @Serializable
 data class AppSettings(

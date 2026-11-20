@@ -62,6 +62,7 @@ import com.inkpal.app.ui.theme.Ink
 import com.inkpal.app.ui.theme.InkPalTheme
 import com.inkpal.app.ui.theme.InkText
 import com.inkpal.app.ui.theme.NightColors
+import com.inkpal.app.ui.theme.SepiaColors
 import com.inkpal.app.ui.theme.PaperColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -121,8 +122,13 @@ internal class SessionTracker(private val store: InkStore, private val book: Boo
 fun ReaderScreen(app: InkPalApp, bookId: String, onClose: () -> Unit) {
     val data by app.store.data.collectAsStateWithLifecycle()
     val book = data.books.firstOrNull { it.id == bookId }
-    val dark = data.settings.readerTheme == ReaderTheme.TRUE_BLACK
-    val colors = if (dark) NightColors else PaperColors
+    val theme = data.settings.readerTheme
+    val dark = theme == ReaderTheme.TRUE_BLACK
+    val colors = when (theme) {
+        ReaderTheme.WHITE -> PaperColors
+        ReaderTheme.SEPIA -> SepiaColors
+        ReaderTheme.TRUE_BLACK -> NightColors
+    }
     val context = LocalContext.current
 
     var opened by remember(bookId) { mutableStateOf<Result<EpubBook>?>(null) }
@@ -149,7 +155,7 @@ fun ReaderScreen(app: InkPalApp, bookId: String, onClose: () -> Unit) {
                     result.exceptionOrNull()?.message ?: "The file may have moved or be damaged.",
                     onClose,
                 )
-                else -> ReaderContent(app, book, data, result.getOrThrow(), dark, onClose)
+                else -> ReaderContent(app, book, data, result.getOrThrow(), theme, onClose)
             }
         }
     }
@@ -180,7 +186,7 @@ private fun ReaderContent(
     book: Book,
     data: LibraryData,
     epub: EpubBook,
-    dark: Boolean,
+    theme: ReaderTheme,
     onClose: () -> Unit,
 ) {
     val store = app.store
@@ -193,7 +199,8 @@ private fun ReaderContent(
     val cutoutTop = with(density) { WindowInsets.displayCutout.getTop(this).toDp() }
     val topPad = (cutoutTop.value + 36f).roundToInt()
     val bottomPad = 40
-    val css = ReaderStyle.css(settings, dark, topPad, bottomPad)
+    val css = ReaderStyle.css(settings, theme, topPad, bottomPad)
+    val dark = theme == ReaderTheme.TRUE_BLACK
 
     var menuOpen by remember { mutableStateOf(false) }
     var panel by remember { mutableStateOf(Panel.NONE) }
@@ -307,7 +314,7 @@ private fun ReaderContent(
         }
     }
 
-    val background = ReaderEngine.backgroundFor(dark)
+    val background = ReaderEngine.backgroundFor(theme)
     Box(Modifier.fillMaxSize()) {
         AndroidView(
             factory = { ctx -> engine.createView(ctx, background).also { engine.start(book.position, css) } },
