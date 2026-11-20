@@ -17,6 +17,9 @@ import java.util.zip.ZipFile
 /** One reading-order document (usually a chapter). `weight` is its size, used to estimate overall progress. */
 class SpineItem(val path: String, val mediaType: String, val weight: Long)
 
+/** One search match: the chapter, which match it is in that chapter, and the text around it. */
+class SearchHit(val spineIndex: Int, val occurrence: Int, val snippet: String)
+
 /** One line of the table of contents. */
 class TocEntry(val title: String, val spineIndex: Int, val anchor: String?, val depth: Int)
 
@@ -80,6 +83,58 @@ class EpubBook private constructor(
     }
 
     fun mediaType(path: String): String = mediaTypes[path.lowercase()] ?: guessType(path)
+
+    /**
+     * Finds [query] (case-insensitive) in every chapter. Matches are counted per text node in
+     * document order, the same way the reader's page script counts them, so
+     * [SearchHit.occurrence] can be used to highlight the exact match.
+     */
+    fun search(query: String, limit: Int = 300, isActive: () -> Boolean = { true }): List<SearchHit> {
+        val q = query.trim().lowercase()
+        if (q.length < 2) return emptyList()
+        val hits = mutableListOf<SearchHit>()
+        for ((i, item) in spine.withIndex()) {
+            if (!isActive() || hits.size >= limit) break
+            val html = open(item.path)?.use { it.readBytes().toString(Charsets.UTF_8) } ?: continue
+            val body = Jsoup.parse(html).body()
+            var occurrence = 0
+            body.traverse { node, _ ->
+                if (node is org.jsoup.nodes.TextNode && hits.size < limit) {
+                    val parent = (node.parentNode() as? Element)?.normalName()
+                    if (parent != "script" && parent != "style") {
+                        val text = node.wholeText
+                        val lower = text.lowercase()
+                        var from = 0
+                        while (true) {
+                            val at = lower.indexOf(q, from)
+                            if (at < 0 || hits.size >= limit) break
+                            hits += SearchHit(i, occurrence, snippet(text, at, q.length))
+                            occurrence++
+                            from = at + q.length
+                        }
+                    }
+                }
+            }
+        }
+        return hits
+    }
+
+    private fun snippet(text: String, at: Int, length: Int): String {
+        val start = (at - 50).coerceAtLeast(0)
+        val end = (at + length + 70).coerceAtMost(text.length)
+        val core = text.substring(start, end).replace(Regex("\\s+"), " ").trim()
+        return (if (start > 0) "…" else "") + core + (if (end < text.length) "…" else "")
+    }
+
+    /** Text of the element with [id] in the chapter at [path] (for footnote pop-ups). */
+    fun noteText(path: String, id: String): String? {
+        val html = open(path)?.use { it.readBytes().toString(Charsets.UTF_8) } ?: return null
+        val doc = Jsoup.parse(html)
+        val el = doc.getElementById(id) ?: doc.selectFirst("[name=\"${id.replace("\"", "")}\"]") ?: return null
+        var text = el.text().trim()
+        if (text.length < 3) text = el.parent()?.text()?.trim() ?: text
+        return text.take(1500).ifEmpty { null }
+    }
 
     override fun close() = zip.close()
 

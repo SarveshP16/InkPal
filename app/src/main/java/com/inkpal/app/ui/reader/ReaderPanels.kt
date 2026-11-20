@@ -63,9 +63,11 @@ import com.inkpal.app.ui.components.SectionLabel
 import com.inkpal.app.ui.theme.Ink
 import com.inkpal.app.ui.theme.InkFonts
 import com.inkpal.app.ui.theme.InkText
+import com.inkpal.app.data.Bookmark
+import com.inkpal.app.ui.components.UnderlineTabs
 
 /** Swallows taps so they don't reach the page underneath. */
-private fun Modifier.blockTouches(): Modifier = clickable(
+internal fun Modifier.blockTouches(): Modifier = clickable(
     interactionSource = MutableInteractionSource(),
     indication = null,
     onClick = {},
@@ -84,6 +86,10 @@ internal fun ReaderMenu(
     onContents: () -> Unit,
     onText: () -> Unit,
     onFinish: () -> Unit,
+    bookmarked: Boolean,
+    onToggleBookmark: () -> Unit,
+    onBookmarks: () -> Unit,
+    onSearch: () -> Unit,
 ) {
     val c = Ink.colors
     Box(
@@ -110,6 +116,12 @@ internal fun ReaderMenu(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
+            IconBtn(InkIcons.Search, "Search in this book", onSearch)
+            IconBtn(
+                if (bookmarked) InkIcons.BookmarkFilled else InkIcons.Bookmark,
+                if (bookmarked) "Remove bookmark" else "Bookmark this page",
+                onToggleBookmark,
+            )
             Box(
                 Modifier
                     .size(44.dp)
@@ -120,7 +132,6 @@ internal fun ReaderMenu(
             ) {
                 Text("Aa", fontFamily = InkFonts.serif, fontSize = 19.sp, fontWeight = FontWeight.Medium, color = c.ink)
             }
-            IconBtn(InkIcons.Contents, "Contents", onContents)
         }
 
         // Bottom panel
@@ -175,6 +186,7 @@ internal fun ReaderMenu(
                     .padding(top = 6.dp),
             ) {
                 MenuAction("Contents", InkIcons.Contents, onContents, Modifier.weight(1f))
+                MenuAction("Bookmarks", InkIcons.Bookmark, onBookmarks, Modifier.weight(1f))
                 MenuAction("Text", null, onText, Modifier.weight(1f))
                 MenuAction(if (book.status == BookStatus.FINISHED) "Finished" else "Mark finished", InkIcons.Check, onFinish, Modifier.weight(1f))
             }
@@ -212,6 +224,10 @@ internal fun ContentsPanel(
     topInset: Dp,
     onPick: (TocEntry) -> Unit,
     onDismiss: () -> Unit,
+    bookmarks: List<Bookmark>,
+    startOnBookmarks: Boolean,
+    onPickBookmark: (Bookmark) -> Unit,
+    onDeleteBookmark: (Bookmark) -> Unit,
 ) {
     val c = Ink.colors
     // Books without a contents list get one line per section.
@@ -220,6 +236,7 @@ internal fun ContentsPanel(
     }
     val current = entries.indexOfLast { it.spineIndex <= currentIndex }.coerceAtLeast(0)
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = (current - 3).coerceAtLeast(0))
+    var showBookmarks by remember { mutableStateOf(startOnBookmarks) }
     Column(
         Modifier
             .fillMaxSize()
@@ -230,11 +247,21 @@ internal fun ContentsPanel(
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(start = 20.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+                .padding(start = 20.dp, end = 4.dp, top = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Contents", style = InkText.bookTitleLarge, modifier = Modifier.weight(1f))
-            IconBtn(InkIcons.Close, "Close contents", onDismiss)
+            Text(if (showBookmarks) "Bookmarks" else "Contents", style = InkText.bookTitleLarge, modifier = Modifier.weight(1f))
+            IconBtn(InkIcons.Close, "Close", onDismiss)
+        }
+        UnderlineTabs(
+            items = listOf(false to "Contents", true to "Bookmarks (${bookmarks.size})"),
+            selected = showBookmarks,
+            onSelect = { showBookmarks = it },
+            modifier = Modifier.padding(horizontal = 20.dp),
+        )
+        if (showBookmarks) {
+            BookmarkList(bookmarks, onPickBookmark, onDeleteBookmark)
+            return@Column
         }
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
             itemsIndexed(entries) { i, entry ->

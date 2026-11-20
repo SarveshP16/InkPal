@@ -70,11 +70,17 @@ object ReaderStyle {
     }
 }
 
-/** Runs inside each chapter: counts pages, scrolls to a page, finds anchors. */
+/**
+ * Runs inside each chapter: counts pages, scrolls to a page, finds anchors, search hits,
+ * links under a tap and the first words of the current page.
+ */
 private const val READER_JS = """
 (function(){
 var W=function(){return window.innerWidth;};
 var se=function(){return document.scrollingElement||document.documentElement;};
+var pageOf=function(el){return Math.max(0,Math.floor((el.getBoundingClientRect().left+se().scrollLeft)/W()));};
+var texts=function(){return document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,null);};
+var skip=function(node){var p=node.parentNode?node.parentNode.nodeName.toLowerCase():'';return p==='script'||p==='style';};
 window.InkPal={
  count:function(){return Math.max(1,Math.round(se().scrollWidth/W()));},
  go:function(p){se().scrollLeft=p*W();},
@@ -83,7 +89,34 @@ window.InkPal={
  pageOfAnchor:function(id){var el=document.getElementById(id);
    if(!el){var n=document.getElementsByName(id);el=n.length?n[0]:null;}
    if(!el){return 0;}
-   return Math.max(0,Math.floor((el.getBoundingClientRect().left+se().scrollLeft)/W()));},
+   return pageOf(el);},
+ clearHit:function(){var ms=document.querySelectorAll('mark.inkpal-hit');
+   for(var i=0;i<ms.length;i++){var m=ms[i];var p=m.parentNode;p.replaceChild(document.createTextNode(m.textContent),m);p.normalize();}},
+ findHit:function(q,n){InkPal.clearHit();q=q.toLowerCase();var w=texts();var c=0;var node;
+   while((node=w.nextNode())){if(skip(node)){continue;}var s=node.nodeValue.toLowerCase();var from=0;
+     while(true){var at=s.indexOf(q,from);if(at<0){break;}
+       if(c===n){var r=document.createRange();r.setStart(node,at);r.setEnd(node,at+q.length);
+         var m=document.createElementNS(document.documentElement.namespaceURI||'http://www.w3.org/1999/xhtml','mark');
+         m.setAttribute('class','inkpal-hit');r.surroundContents(m);return pageOf(m);}
+       c++;from=at+q.length;}}
+   return -1;},
+ snippet:function(){var w=texts();var node;var r=document.createRange();
+   while((node=w.nextNode())){if(skip(node)){continue;}var v=node.nodeValue;if(!v||!v.trim()){continue;}
+     r.selectNodeContents(node);var b=r.getBoundingClientRect();if(b.right<=0){continue;}if(b.left>=W()){break;}
+     var lo=0,hi=v.length-1;
+     while(lo<hi){var mid=(lo+hi)>>1;r.setStart(node,mid);r.setEnd(node,mid+1);if(r.getBoundingClientRect().left>=-1){hi=mid;}else{lo=mid+1;}}
+     return v.substring(lo).replace(/\s+/g,' ').trim().substring(0,160);}
+   return '';},
+ linkAt:function(x,y){var el=document.elementFromPoint(x,y);if(!el||!el.closest){return null;}
+   var a=el.closest('a[href]');if(!a){return null;}
+   var href=a.getAttribute('href')||'';
+   var kind=(a.getAttributeNS('http://www.idpf.org/2007/ops','type')||a.getAttribute('epub:type')||'')+' '+(a.getAttribute('role')||'');
+   var label=(a.textContent||'').trim();
+   var note=/noteref/.test(kind)||/^[\[(]?[0-9*†‡]{1,3}[\])]?$/.test(label)||(!!a.closest('sup')&&label.length<5);
+   var text='';
+   if(href.charAt(0)==='#'){var tg=document.getElementById(href.substring(1));
+     if(tg){text=(tg.textContent||'').trim();if(text.length<3&&tg.parentElement){text=(tg.parentElement.textContent||'').trim();}}}
+   return {href:href,note:note,text:text.replace(/\s+/g,' ').substring(0,1500)};},
  report:function(){InkPalBridge.onLayout(InkPal.count());}
 };
 window.addEventListener('load',function(){setTimeout(InkPal.report,30);});
@@ -122,6 +155,7 @@ class ReaderEngine(
         data class Fraction(val value: Float) : Target
         data object Last : Target
         data class Anchor(val id: String) : Target
+        data class Hit(val query: String, val occurrence: Int) : Target
     }
 
     private var pending: Target = Target.Fraction(0f)
@@ -132,6 +166,89 @@ class ReaderEngine(
         get() = if (pageCount <= 1) 0f else page.toFloat() / (pageCount - 1)
 
     val progress: Float get() = epub.progressOf(index, fraction)
+
+    /** Saved-position form of where the reader is ("chapterIndex:fraction"). */
+    val position: String get() = "$index:$fraction"
+
+    /** Where to return after following a link, while the "Back" chip is showing. */
+    var backPosition by mutableStateOf<String?>(null)
+        private set
+
+    /** True when [position] (a saved position) falls on the page being shown. */
+    fun isOnPage(position: String): Boolean {
+        val (i, f) = parse(position)
+        return ready && i == index && (f * (pageCount - 1)).roundToInt() == page
+    }
+
+    fun jumpToPosition(position: String) {
+        val (i, f) = parse(position)
+        if (i == index && ready) moveTo((f * (pageCount - 1)).roundToInt().coerceIn(0, pageCount - 1))
+        else load(i, Target.Fraction(f))
+    }
+
+    /** Opens a search result and highlights it. */
+    fun jumpToHit(spineIndex: Int, query: String, occurrence: Int) = load(spineIndex, Target.Hit(query, occurrence))
+
+    /** The first words on the current page, for a bookmark. */
+    fun snippet(onResult: (String) -> Unit) {
+        val view = webView ?: return onResult("")
+        view.evaluateJavascript("InkPal.snippet()") { onResult(jsString(it)) }
+    }
+
+    class Link(val href: String, val isNote: Boolean, val text: String)
+
+    /** The link under a tap at ([x], [y]) in CSS px, or null. */
+    fun linkAt(x: Float, y: Float, onResult: (Link?) -> Unit) {
+        val view = webView
+        if (view == null || !ready) return onResult(null)
+        view.evaluateJavascript("InkPal.linkAt($x,$y)") { r ->
+            val link = try {
+                if (r == null || r == "null") null
+                else JSONObject(r).let { Link(it.optString("href"), it.optBoolean("note"), it.optString("text")) }
+            } catch (e: Exception) {
+                null
+            }
+            onResult(link?.takeIf { it.href.isNotEmpty() })
+        }
+    }
+
+    /** Book path and #id that [href] points to, relative to the current chapter. */
+    fun resolveLink(href: String): Pair<String, String?> {
+        val current = epub.spine[index].path
+        if (href.startsWith("#")) return current to href.drop(1)
+        return EpubBook.resolve(current.substringBeforeLast('/', ""), href)
+    }
+
+    /** Follows a link inside the book; returns false when it points outside the book. */
+    fun followLink(href: String): Boolean {
+        val (path, anchor) = resolveLink(href)
+        val i = epub.spineIndexOf(path) ?: return false
+        backPosition = position
+        load(i, anchor?.let { Target.Anchor(it) } ?: Target.Fraction(0f))
+        return true
+    }
+
+    fun goBack() {
+        val back = backPosition ?: return
+        backPosition = null
+        jumpToPosition(back)
+    }
+
+    fun dismissBack() {
+        backPosition = null
+    }
+
+    private fun parse(position: String): Pair<Int, Float> {
+        val i = position.substringBefore(':').toIntOrNull()?.coerceIn(0, epub.spine.lastIndex) ?: 0
+        val f = position.substringAfter(':', "0").toFloatOrNull()?.coerceIn(0f, 1f) ?: 0f
+        return i to f
+    }
+
+    private fun jsString(raw: String?): String = try {
+        org.json.JSONTokener(raw ?: "").nextValue() as? String ?: ""
+    } catch (e: Exception) {
+        ""
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     fun createView(context: Context, background: Int): WebView = WebView(context).apply {
@@ -254,6 +371,11 @@ class ReaderEngine(
             Target.Last -> place(pageCount - 1)
             is Target.Anchor -> webView?.evaluateJavascript("InkPal.pageOfAnchor(${JSONObject.quote(t.id)})") { result ->
                 place(result?.trim('"')?.toIntOrNull() ?: 0)
+            }
+            is Target.Hit -> webView?.evaluateJavascript(
+                "InkPal.findHit(${JSONObject.quote(t.query)},${t.occurrence})",
+            ) { result ->
+                place(result?.trim('"')?.toIntOrNull()?.takeIf { it >= 0 } ?: 0)
             }
         }
     }

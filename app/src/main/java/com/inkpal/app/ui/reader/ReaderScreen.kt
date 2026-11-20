@@ -48,7 +48,13 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.inkpal.app.InkPalApp
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+import androidx.compose.runtime.rememberCoroutineScope
 import com.inkpal.app.data.Book
+import com.inkpal.app.data.Bookmark
+import kotlinx.coroutines.launch
 import com.inkpal.app.data.InkStore
 import com.inkpal.app.data.LibraryData
 import com.inkpal.app.data.ReaderTheme
@@ -77,7 +83,10 @@ object ReaderKeys {
     var turn: ((forward: Boolean) -> Unit)? = null
 }
 
-internal enum class Panel { NONE, CONTENTS, TEXT }
+internal enum class Panel { NONE, CONTENTS, BOOKMARKS, SEARCH, TEXT }
+
+/** A footnote pop-up: its text (null while loading) and the link it came from. */
+internal class NoteState(val text: String?, val href: String)
 
 /** Logs one stretch of reading between opening (or returning to) the book and leaving it. */
 internal class SessionTracker(private val store: InkStore, private val book: Book) {
@@ -208,6 +217,11 @@ private fun ReaderContent(
     var atEnd by remember { mutableStateOf(false) }
     var lastTouch by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var idle by remember { mutableStateOf(false) }
+    var note by remember { mutableStateOf<NoteState?>(null) }
+    val search = remember(epub) { SearchState() }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val bookmarks = data.bookmarks.filter { it.bookId == book.id }
 
     val tracker = remember(book.id) { SessionTracker(store, book) }
     val engine = remember(epub) {
@@ -230,6 +244,64 @@ private fun ReaderContent(
     LaunchedEffect(css) { engine.setCss(css) }
 
     val touched = { lastTouch = System.currentTimeMillis() }
+    val bookmarked = engine.ready && bookmarks.any { engine.isOnPage(it.position) }
+
+    val toggleBookmark: () -> Unit = {
+        val here = bookmarks.filter { engine.isOnPage(it.position) }
+        if (here.isNotEmpty()) {
+            here.forEach { store.removeBookmark(it.id) }
+        } else {
+            val position = engine.position
+            val progress = engine.progress
+            val label = epub.chapterTitle(engine.index)
+            engine.snippet { text ->
+                store.addBookmark(
+                    Bookmark(
+                        id = UUID.randomUUID().toString(),
+                        bookId = book.id,
+                        position = position,
+                        progress = progress,
+                        label = label,
+                        snippet = text,
+                        createdAt = System.currentTimeMillis(),
+                    ),
+                )
+            }
+        }
+    }
+
+    /** A tapped link: footnotes pop up, book links jump (with a way back), web links open outside. */
+    val openLink: (ReaderEngine.Link) -> Unit = { link ->
+        val href = link.href
+        when {
+            href.startsWith("http://") || href.startsWith("https://") || href.startsWith("mailto:") -> {
+                try {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(href)))
+                } catch (e: Exception) {
+                    Toast.makeText(context, "No app can open this link", Toast.LENGTH_SHORT).show()
+                }
+            }
+            link.isNote -> {
+                if (link.text.isNotEmpty()) {
+                    note = NoteState(link.text, href)
+                } else {
+                    note = NoteState(null, href)
+                    val (path, id) = engine.resolveLink(href)
+                    scope.launch {
+                        val text = withContext(Dispatchers.IO) { id?.let { epub.noteText(path, it) } }
+                        if (note?.href == href) {
+                            if (text != null) note = NoteState(text, href)
+                            else {
+                                note = null
+                                engine.followLink(href)
+                            }
+                        }
+                    }
+                }
+            }
+            else -> engine.followLink(href)
+        }
+    }
 
     // Reading session: from start/return to leaving the screen or the app.
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -292,7 +364,7 @@ private fun ReaderContent(
 
     // Volume keys turn pages when nothing is open on top of the page.
     val latestSettings by rememberUpdatedState(settings)
-    val overlayOpen by rememberUpdatedState(menuOpen || panel != Panel.NONE || showEnd)
+    val overlayOpen by rememberUpdatedState(menuOpen || panel != Panel.NONE || showEnd || note != null)
     DisposableEffect(engine) {
         ReaderKeys.active = { latestSettings.volumeKeysTurnPages && !overlayOpen }
         ReaderKeys.turn = { forward ->
@@ -307,6 +379,7 @@ private fun ReaderContent(
 
     BackHandler {
         when {
+            note != null -> note = null
             showEnd -> showEnd = false
             panel != Panel.NONE -> panel = Panel.NONE
             menuOpen -> menuOpen = false
@@ -333,10 +406,14 @@ private fun ReaderContent(
                     detectTapGestures { pos ->
                         touched()
                         val x = pos.x / size.width
-                        when {
-                            x < 0.3f -> engine.prev()
-                            x > 0.7f -> engine.next()
-                            else -> menuOpen = true
+                        // A link under the finger wins over the page-turn zones.
+                        engine.linkAt(pos.x / density.density, pos.y / density.density) { link ->
+                            when {
+                                link != null -> openLink(link)
+                                x < 0.3f -> engine.prev()
+                                x > 0.7f -> engine.next()
+                                else -> menuOpen = true
+                            }
                         }
                     }
                 }
@@ -399,6 +476,18 @@ private fun ReaderContent(
             }
         }
 
+        if (bookmarked) BookmarkRibbon(cutoutTop, Modifier.align(Alignment.TopEnd))
+        val back = engine.backPosition
+        if (back != null && !menuOpen && panel == Panel.NONE) {
+            BackChip(
+                onBack = { engine.goBack() },
+                onDismiss = { engine.dismissBack() },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 48.dp),
+            )
+        }
+
         if (menuOpen && panel == Panel.NONE && !showEnd) {
             ReaderMenu(
                 book = book,
@@ -414,10 +503,14 @@ private fun ReaderContent(
                     atEnd = false
                     showEnd = true
                 },
+                bookmarked = bookmarked,
+                onToggleBookmark = toggleBookmark,
+                onBookmarks = { panel = Panel.BOOKMARKS },
+                onSearch = { panel = Panel.SEARCH },
             )
         }
         when (panel) {
-            Panel.CONTENTS -> ContentsPanel(
+            Panel.CONTENTS, Panel.BOOKMARKS -> ContentsPanel(
                 epub = epub,
                 currentIndex = engine.index,
                 topInset = cutoutTop,
@@ -427,6 +520,25 @@ private fun ReaderContent(
                     engine.jumpTo(entry)
                 },
                 onDismiss = { panel = Panel.NONE },
+                bookmarks = bookmarks,
+                startOnBookmarks = panel == Panel.BOOKMARKS,
+                onPickBookmark = { b ->
+                    panel = Panel.NONE
+                    menuOpen = false
+                    engine.jumpToPosition(b.position)
+                },
+                onDeleteBookmark = { b -> store.removeBookmark(b.id) },
+            )
+            Panel.SEARCH -> SearchPanel(
+                epub = epub,
+                state = search,
+                topInset = cutoutTop,
+                onPick = { hit ->
+                    panel = Panel.NONE
+                    menuOpen = false
+                    engine.jumpToHit(hit.spineIndex, search.submitted, hit.occurrence)
+                },
+                onDismiss = { panel = Panel.NONE },
             )
             Panel.TEXT -> TextPanel(
                 settings = settings,
@@ -434,6 +546,16 @@ private fun ReaderContent(
                 onDismiss = { panel = Panel.NONE },
             )
             Panel.NONE -> Unit
+        }
+        note?.let { n ->
+            NoteSheet(
+                text = n.text,
+                onGoToNote = {
+                    note = null
+                    engine.followLink(n.href)
+                },
+                onDismiss = { note = null },
+            )
         }
         if (showEnd) {
             EndOfBook(
