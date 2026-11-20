@@ -139,6 +139,37 @@ class InkStore(private val context: Context, private val scope: CoroutineScope) 
 
     fun updateSettings(change: (AppSettings) -> AppSettings) = update { it.copy(settings = change(it.settings)) }
 
+    // ---- Wishlist ----
+
+    fun addWish(title: String, author: String, note: String) = update { d ->
+        val item = WishItem(
+            id = java.util.UUID.randomUUID().toString(),
+            title = title.trim(),
+            author = author.trim(),
+            note = note.trim(),
+            addedAt = System.currentTimeMillis(),
+        )
+        d.copy(wishlist = d.wishlist + item)
+    }
+
+    fun editWish(id: String, title: String, author: String, note: String) = update { d ->
+        d.copy(wishlist = d.wishlist.map { if (it.id == id) it.copy(title = title.trim(), author = author.trim(), note = note.trim()) else it })
+    }
+
+    fun toggleWishGot(id: String) = update { d ->
+        d.copy(wishlist = d.wishlist.map {
+            if (it.id == id) it.copy(gotAt = if (it.gotAt > 0) 0 else System.currentTimeMillis()) else it
+        })
+    }
+
+    fun removeWish(id: String) = update { d -> d.copy(wishlist = d.wishlist.filterNot { it.id == id }) }
+
+    // ---- Bookmarks ----
+
+    fun addBookmark(bookmark: Bookmark) = update { d -> d.copy(bookmarks = d.bookmarks + bookmark) }
+
+    fun removeBookmark(id: String) = update { d -> d.copy(bookmarks = d.bookmarks.filterNot { it.id == id }) }
+
     companion object {
         private const val TAG = "InkStore"
         private const val MERGE_GAP_MS = 2 * 60_000L

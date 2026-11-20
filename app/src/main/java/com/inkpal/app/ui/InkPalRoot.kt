@@ -44,10 +44,11 @@ import com.inkpal.app.ui.details.BookDetailsScreen
 import com.inkpal.app.ui.history.HistoryScreen
 import com.inkpal.app.ui.library.LibraryScreen
 import com.inkpal.app.ui.settings.SettingsScreen
+import com.inkpal.app.ui.wishlist.WishlistScreen
 import com.inkpal.app.ui.theme.Ink
 import com.inkpal.app.ui.theme.InkText
 
-enum class Tab { LIBRARY, HISTORY, SETTINGS }
+enum class Tab { LIBRARY, HISTORY, WISHLIST, SETTINGS }
 
 /** App shell: three tabs, plus the book details page on top when a book is opened. */
 @Composable
@@ -117,6 +118,7 @@ fun InkPalRoot(app: InkPalApp) {
                             onRescan = app.scanner::scan,
                         )
                         Tab.HISTORY -> HistoryScreen(data = data, onOpen = { openBookId = it })
+                        Tab.WISHLIST -> WishlistScreen(data = data, store = app.store, onOpenBook = { openBookId = it })
                         Tab.SETTINGS -> SettingsScreen(
                             data = data,
                             scan = scan,
@@ -145,6 +147,7 @@ private fun BottomBar(tab: Tab, onSelect: (Tab) -> Unit) {
     ) {
         BarItem("Library", InkIcons.Library, InkIcons.LibraryBold, tab == Tab.LIBRARY) { onSelect(Tab.LIBRARY) }
         BarItem("History", InkIcons.History, InkIcons.HistoryBold, tab == Tab.HISTORY) { onSelect(Tab.HISTORY) }
+        BarItem("Wishlist", InkIcons.Heart, InkIcons.HeartBold, tab == Tab.WISHLIST) { onSelect(Tab.WISHLIST) }
         BarItem("Settings", InkIcons.Settings, InkIcons.SettingsBold, tab == Tab.SETTINGS) { onSelect(Tab.SETTINGS) }
     }
 }

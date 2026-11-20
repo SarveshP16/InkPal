@@ -128,6 +128,32 @@ data class AppSettings(
     val brightness: Float = -1f,
 )
 
+/** A book the user wants to read (not a file; just a title to remember). */
+@Serializable
+data class WishItem(
+    val id: String,
+    val title: String,
+    val author: String = "",
+    val note: String = "",
+    val addedAt: Long,
+    /** When it was marked "got it"; 0 while still wanted. */
+    val gotAt: Long = 0,
+)
+
+/** A saved place in a book. `position` uses the same format as [Book.position]. */
+@Serializable
+data class Bookmark(
+    val id: String,
+    val bookId: String,
+    val position: String,
+    val progress: Float,
+    /** Chapter title (EPUB) or "Page N" (PDF). */
+    val label: String,
+    /** A few words from the top of the page. */
+    val snippet: String = "",
+    val createdAt: Long,
+)
+
 @Serializable
 data class LibraryData(
     val books: List<Book> = emptyList(),
@@ -135,6 +161,8 @@ data class LibraryData(
     val sessions: List<ReadingSession> = emptyList(),
     /** URIs the user removed from the library; rescans skip them. */
     val hidden: List<String> = emptyList(),
+    val wishlist: List<WishItem> = emptyList(),
+    val bookmarks: List<Bookmark> = emptyList(),
     val settings: AppSettings = AppSettings(),
     val lastScanAt: Long = 0,
 )

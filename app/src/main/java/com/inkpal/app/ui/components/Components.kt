@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -274,6 +275,43 @@ fun ValueRow(title: String, value: String, onClick: () -> Unit, subtitle: String
         }
         Text(value, style = InkText.body, color = if (enabled) c.muted else c.faint)
         Icon(InkIcons.ChevronRight, null, Modifier.size(16.dp), tint = if (enabled) c.muted else c.faint)
+    }
+}
+
+/** A labelled single-line text field with an underline, in the app's black-and-white style. */
+@Composable
+fun InkField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "",
+    singleLine: Boolean = true,
+    focusRequester: androidx.compose.ui.focus.FocusRequester? = null,
+) {
+    val c = Ink.colors
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label.uppercase(), style = InkText.label, color = c.muted)
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .drawBehind { drawLine(c.ink, Offset(0f, size.height), Offset(size.width, size.height), 1.dp.toPx()) }
+                .padding(vertical = 10.dp),
+        ) {
+            if (value.isEmpty() && placeholder.isNotEmpty()) {
+                Text(placeholder, style = InkText.body.copy(fontSize = 16.sp), color = c.faint)
+            }
+            androidx.compose.foundation.text.BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                singleLine = singleLine,
+                textStyle = InkText.body.copy(fontSize = 16.sp, color = c.ink),
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(c.ink),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier),
+            )
+        }
     }
 }
 
